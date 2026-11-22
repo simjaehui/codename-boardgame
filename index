@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>교실 코드네임 보드게임</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Pretendard', system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      min-height: 100vh;
+      padding: 16px;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 960px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .header {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 14px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand { font-size: 18px; font-weight: 800; color: #38bdf8; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    select, input, button {
+      font-family: inherit;
+      font-size: 13.5px;
+      border-radius: 10px;
+      border: 1px solid #475569;
+      padding: 8px 12px;
+    }
+    select, input { background: #0f172a; color: #f8fafc; }
+    button { cursor: pointer; font-weight: 700; border: none; transition: filter 0.15s; }
+    button:hover { filter: brightness(1.08); }
+    .btn-master { background: #f59e0b; color: #0f172a; }
+    .btn-master.active { background: #ef4444; color: #fff; }
+    .btn-reset { background: #475569; color: #fff; }
+    .scoreboard {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .score-card {
+      background: #1e293b;
+      border-radius: 14px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 800;
+      border-left: 5px solid transparent;
+    }
+    .score-blue { border-left-color: #3b82f6; }
+    .score-red { border-left-color: #ef4444; }
+    .score-neutral { border-left-color: #eab308; }
+    .grid-5x5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 680px) {
+      .grid-5x5 { gap: 6px; }
+      .card { min-height: 68px !important; font-size: 14px !important; }
+    }
+    .card {
+      min-height: 88px;
+      background: #e2e8f0;
+      color: #0f172a;
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-size: 18px;
+      font-weight: 800;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      border: 3px solid transparent;
+    }
+    .card.peek-BLUE { border-color: #3b82f6; background: #dbeafe; }
+    .card.peek-RED { border-color: #ef4444; background: #fee2e2; }
+    .card.peek-NEUTRAL { border-color: #eab308; background: #fef9c3; }
+    .card.revealed-BLUE { background: #2563eb; color: #fff; border-color: #93c5fd; }
+    .card.revealed-RED { background: #dc2626; color: #fff; border-color: #fca5a5; }
+    .card.revealed-NEUTRAL { background: #ca8a04; color: #fff; border-color: #fef08a; }
+    .role-badge {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      font-size: 10px;
+      font-weight: 800;
+      opacity: 0.85;
+    }
+    .story-bar {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 14px 18px;
+      display: grid;
+      grid-template-columns: 110px 110px 1fr 140px;
+      gap: 10px;
+      align-items: center;
+    }
+    @media (max-width: 760px) {
+      .story-bar { grid-template-columns: 1fr 1fr; }
+    }
+    .btn-submit { background: #10b981; color: #052e16; padding: 10px 14px; }
+    .status-msg { font-size: 13px; color: #94a3b8; text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="brand">교실 코드네임 보드게임 · 민주시민 배움자리</div>
+      <div class="controls">
+        <button class="btn-master" id="master-btn" onclick="toggleMaster()">코드마스터 정답 보기: OFF</button>
+        <button class="btn-reset" onclick="resetBoard()">새 판 섞기</button>
+      </div>
+    </div>
+
+    <div class="scoreboard">
+      <div class="score-card score-blue">
+        <span>A팀 (BLUE) 남은 카드</span>
+        <span id="left-blue">12</span>
+      </div>
+      <div class="score-card score-red">
+        <span>B팀 (RED) 남은 카드</span>
+        <span id="left-red">12</span>
+      </div>
+      <div class="score-card score-neutral">
+        <span>중립 카드 (교실)</span>
+        <span id="left-neutral">1</span>
+      </div>
+    </div>
+
+    <div class="grid-5x5" id="board"></div>
+
+    <div class="story-bar">
+      <select id="group-no">
+        <option value="1조">1조</option>
+        <option value="2조">2조</option>
+        <option value="3조">3조</option>
+        <option value="4조">4조</option>
+        <option value="5조">5조</option>
+        <option value="6조">6조</option>
+        <option value="7조">7조</option>
+        <option value="8조">8조</option>
+      </select>
+      <select id="selected-team">
+        <option value="A팀">A팀 (BLUE)</option>
+        <option value="B팀">B팀 (RED)</option>
+      </select>
+      <input type="text" id="group-story" placeholder="힌트 단어와 숫자 또는 모둠 스토리 입력 (예: 연대 2)" />
+      <button class="btn-submit" id="save-btn" onclick="saveStoryToSheet()">시트에 힌트 기록</button>
+    </div>
+    <div class="status-msg" id="status-msg">카드를 클릭하면 서버 대기 없이 즉시 뒤집힙니다.</div>
+  </div>
+
+  <script>
+    const GAS_WEBAPP_URL = "";
+
+    const INITIAL_WORDS = [
+      { word: "미로", role: "BLUE" }, { word: "숏폼", role: "RED" },
+      { word: "불꽃", role: "BLUE" }, { word: "주도성", role: "BLUE" },
+      { word: "사막", role: "RED" }, { word: "눈빛", role: "BLUE" },
+      { word: "안전망", role: "BLUE" }, { word: "어휘", role: "RED" },
+      { word: "열쇠", role: "BLUE" }, { word: "입시", role: "RED" },
+      { word: "근육", role: "BLUE" }, { word: "시계", role: "RED" },
+      { word: "연대", role: "BLUE" }, { word: "요약", role: "RED" },
+      { word: "씨앗", role: "BLUE" }, { word: "거울", role: "RED" },
+      { word: "소통", role: "BLUE" }, { word: "소음", role: "RED" },
+      { word: "질문", role: "BLUE" }, { word: "도파민", role: "RED" },
+      { word: "토론", role: "BLUE" }, { word: "벽", role: "RED" },
+      { word: "실천", role: "BLUE" }, { word: "가짜", role: "RED" },
+      { word: "교실", role: "NEUTRAL" }
+    ];
+
+    let cards = [];
+    let isMaster = false;
+    let lastClickedWord = "";
+
+    function shuffle(arr) {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    function resetBoard() {
+      cards = shuffle(INITIAL_WORDS).map((item, idx) => ({
+        id: idx,
+        word: item.word,
+        role: item.role,
+        revealed: false
+      }));
+      render();
+      document.getElementById("status-msg").textContent = "새 판이 섞였습니다. 코드마스터만 정답 보기를 켜세요!";
+    }
+
+    function toggleMaster() {
+      isMaster = !isMaster;
+      const btn = document.getElementById("master-btn");
+      btn.textContent = `코드마스터 정답 보기: ${isMaster ? "ON" : "OFF"}`;
+      btn.classList.toggle("active", isMaster);
+      render();
+    }
+
+    function flipCard(idx) {
+      const card = cards[idx];
+      if (card.revealed) return;
+      card.revealed = true;
+      lastClickedWord = card.word;
+      render(idx);
+    }
+
+    function render(animatedIdx = -1) {
+      const board = document.getElementById("board");
+      board.innerHTML = "";
+
+      let blueLeft = 0, redLeft = 0, neutralLeft = 0;
+
+      cards.forEach((c, idx) => {
+        if (!c.revealed) {
+          if (c.role === "BLUE") blueLeft++;
+          else if (c.role === "RED") redLeft++;
+          else neutralLeft++;
+        }
+
+        const el = document.createElement("div");
+        el.className = "card";
+        if (c.revealed) {
+          el.classList.add(`revealed-${c.role}`);
+        } else if (isMaster) {
+          el.classList.add(`peek-${c.role}`);
+        }
+
+        const roleLabel = c.role === "BLUE" ? "A팀" : c.role === "RED" ? "B팀" : "중립";
+        el.innerHTML = `
+          ${(c.revealed || isMaster) ? `<span class="role-badge">${roleLabel}</span>` : ""}
+          <span>${c.word}</span>
+        `;
+        el.onclick = () => flipCard(idx);
+        board.appendChild(el);
+
+        if (idx === animatedIdx) {
+          gsap.fromTo(el, { rotateY: 90, scale: 0.9 }, { rotateY: 0, scale: 1, duration: 0.3, ease: "back.out(1.8)" });
+        }
+      });
+
+      document.getElementById("left-blue").textContent = blueLeft;
+      document.getElementById("left-red").textContent = redLeft;
+      document.getElementById("left-neutral").textContent = neutralLeft;
+    }
+
+    async function saveStoryToSheet() {
+      const groupNo = document.getElementById("group-no").value;
+      const selectedTeam = document.getElementById("selected-team").value;
+      const groupStory = document.getElementById("group-story").value.trim();
+
+      if (!groupStory) {
+        alert("힌트 또는 모둠 스토리를 입력해 주세요.");
+        return;
+      }
+      if (!GAS_WEBAPP_URL) {
+        document.getElementById("status-msg").textContent =
+          `[로컬 기록됨] ${groupNo} ${selectedTeam} · 선택단어: ${lastClickedWord || "-"} · 스토리: "${groupStory}" (GAS URL 입력 시 시트에도 저장)`;
+        document.getElementById("group-story").value = "";
+        return;
+      }
+
+      const btn = document.getElementById("save-btn");
+      btn.disabled = true;
+      await fetch(GAS_WEBAPP_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          groupNo,
+          selectedTeam,
+          selectedWords: lastClickedWord,
+          groupStory
+        })
+      });
+      document.getElementById("status-msg").textContent = `✅ ${groupNo} ${selectedTeam} 기록이 시트(Questions)에 저장되었습니다.`;
+      document.getElementById("group-story").value = "";
+      btn.disabled = false;
+    }
+
+    resetBoard();
+  </script>
+</body>
+</html>
