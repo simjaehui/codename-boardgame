@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>교실 코드네임 보드게임</title>
+  <title>교실 코드네임 보드게임 · 턴 교대 버전</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,10 +45,35 @@
     }
     select, input { background: #0f172a; color: #f8fafc; }
     button { cursor: pointer; font-weight: 700; border: none; transition: filter 0.15s; }
-    button:hover { filter: brightness(1.08); }
+    button:hover:not(:disabled) { filter: brightness(1.08); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
     .btn-master { background: #f59e0b; color: #0f172a; }
     .btn-master.active { background: #ef4444; color: #fff; }
-    .btn-reset { background: #475569; color: #fff; }
+    .btn-pass { background: #64748b; color: #fff; }
+    .btn-reset { background: #334155; color: #fff; }
+
+    .turn-banner {
+      background: #1e293b;
+      border: 2px solid #3b82f6;
+      border-radius: 14px;
+      padding: 12px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+    }
+    .turn-banner.red-turn { border-color: #ef4444; }
+    .turn-pill {
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      background: #2563eb;
+      color: #fff;
+    }
+    .turn-banner.red-turn .turn-pill { background: #dc2626; }
+
     .scoreboard {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -67,6 +92,7 @@
     .score-blue { border-left-color: #3b82f6; }
     .score-red { border-left-color: #ef4444; }
     .score-neutral { border-left-color: #eab308; }
+
     .grid-5x5 {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -93,35 +119,40 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.25);
       border: 3px solid transparent;
     }
+    .card.locked {
+      cursor: not-allowed;
+      opacity: 0.72;
+    }
     .card.peek-BLUE { border-color: #3b82f6; background: #dbeafe; }
     .card.peek-RED { border-color: #ef4444; background: #fee2e2; }
     .card.peek-NEUTRAL { border-color: #eab308; background: #fef9c3; }
-    .card.revealed-BLUE { background: #2563eb; color: #fff; border-color: #93c5fd; }
-    .card.revealed-RED { background: #dc2626; color: #fff; border-color: #fca5a5; }
-    .card.revealed-NEUTRAL { background: #ca8a04; color: #fff; border-color: #fef08a; }
+    .card.revealed-BLUE { background: #2563eb; color: #fff; border-color: #93c5fd; cursor: default; }
+    .card.revealed-RED { background: #dc2626; color: #fff; border-color: #fca5a5; cursor: default; }
+    .card.revealed-NEUTRAL { background: #ca8a04; color: #fff; border-color: #fef08a; cursor: default; }
     .role-badge {
       position: absolute;
       top: 6px;
       right: 8px;
       font-size: 10px;
       font-weight: 800;
-      opacity: 0.85;
+      opacity: 0.9;
     }
+
     .story-bar {
       background: #1e293b;
       border: 1px solid #334155;
       border-radius: 16px;
       padding: 14px 18px;
       display: grid;
-      grid-template-columns: 110px 110px 1fr 140px;
+      grid-template-columns: 1fr 140px;
       gap: 10px;
       align-items: center;
     }
     @media (max-width: 760px) {
-      .story-bar { grid-template-columns: 1fr 1fr; }
+      .story-bar { grid-template-columns: 1fr; }
     }
     .btn-submit { background: #10b981; color: #052e16; padding: 10px 14px; }
-    .status-msg { font-size: 13px; color: #94a3b8; text-align: right; }
+    .status-msg { font-size: 13px; color: #cbd5e1; }
   </style>
 </head>
 <body>
@@ -129,9 +160,32 @@
     <div class="header">
       <div class="brand">교실 코드네임 보드게임 · 민주시민 배움자리</div>
       <div class="controls">
-        <button class="btn-master" id="master-btn" onclick="toggleMaster()">코드마스터 정답 보기: OFF</button>
+        <select id="group-no" onchange="resetBoard()">
+          <option value="1">1조</option>
+          <option value="2">2조</option>
+          <option value="3">3조</option>
+          <option value="4">4조</option>
+          <option value="5">5조</option>
+          <option value="6">6조</option>
+          <option value="7">7조</option>
+          <option value="8">8조</option>
+        </select>
+        <select id="my-team" onchange="render()">
+          <option value="BLUE">내 기기: A팀 (BLUE)</option>
+          <option value="RED">내 기기: B팀 (RED)</option>
+        </select>
+        <button class="btn-pass" onclick="passTurn()">턴 넘기기</button>
+        <button class="btn-master" id="master-btn" onclick="toggleMaster()">정답 보기: OFF</button>
         <button class="btn-reset" onclick="resetBoard()">새 판 섞기</button>
       </div>
+    </div>
+
+    <div class="turn-banner" id="turn-banner">
+      <div>
+        <span class="turn-pill" id="turn-pill">현재 차례: A팀 (BLUE)</span>
+        <span id="turn-lock-msg" style="margin-left: 10px; font-size: 14px;"></span>
+      </div>
+      <div id="round-info" style="font-size: 13px; color: #94a3b8;">1라운드</div>
     </div>
 
     <div class="scoreboard">
@@ -152,24 +206,10 @@
     <div class="grid-5x5" id="board"></div>
 
     <div class="story-bar">
-      <select id="group-no">
-        <option value="1조">1조</option>
-        <option value="2조">2조</option>
-        <option value="3조">3조</option>
-        <option value="4조">4조</option>
-        <option value="5조">5조</option>
-        <option value="6조">6조</option>
-        <option value="7조">7조</option>
-        <option value="8조">8조</option>
-      </select>
-      <select id="selected-team">
-        <option value="A팀">A팀 (BLUE)</option>
-        <option value="B팀">B팀 (RED)</option>
-      </select>
       <input type="text" id="group-story" placeholder="힌트 단어와 숫자 또는 모둠 스토리 입력 (예: 연대 2)" />
       <button class="btn-submit" id="save-btn" onclick="saveStoryToSheet()">시트에 힌트 기록</button>
     </div>
-    <div class="status-msg" id="status-msg">카드를 클릭하면 서버 대기 없이 즉시 뒤집힙니다.</div>
+    <div class="status-msg" id="status-msg">내 팀 차례일 때만 카드를 누를 수 있습니다. 상대 팀 카드나 중립 카드를 누르면 즉시 턴이 넘어갑니다!</div>
   </div>
 
   <script>
@@ -192,46 +232,101 @@
     ];
 
     let cards = [];
+    let currentTurn = "BLUE";
+    let roundCount = 1;
+    let seedOffset = 0;
     let isMaster = false;
     let lastClickedWord = "";
 
-    function shuffle(arr) {
+    function seededShuffle(arr, seed) {
       const copy = [...arr];
+      let s = seed * 9301 + 49297;
       for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        s = (s * 9301 + 49297) % 233280;
+        const j = Math.floor((s / 233280) * (i + 1));
         [copy[i], copy[j]] = [copy[j], copy[i]];
       }
       return copy;
     }
 
-    function resetBoard() {
-      cards = shuffle(INITIAL_WORDS).map((item, idx) => ({
+    function resetBoard(keepSeed = false) {
+      if (!keepSeed) seedOffset += 1;
+      const groupNum = parseInt(document.getElementById("group-no").value, 10) || 1;
+      const mixed = seededShuffle(INITIAL_WORDS, groupNum * 100 + seedOffset);
+      cards = mixed.map((item, idx) => ({
         id: idx,
         word: item.word,
         role: item.role,
         revealed: false
       }));
+      currentTurn = "BLUE";
+      roundCount = 1;
       render();
-      document.getElementById("status-msg").textContent = "새 판이 섞였습니다. 코드마스터만 정답 보기를 켜세요!";
+      document.getElementById("status-msg").textContent =
+        `${groupNum}조 보드판 준비 완료! A팀(BLUE) 차례부터 시작합니다.`;
+    }
+
+    function switchTurn(reasonText) {
+      if (currentTurn === "RED") roundCount += 1;
+      currentTurn = currentTurn === "BLUE" ? "RED" : "BLUE";
+      document.getElementById("status-msg").textContent = reasonText;
+    }
+
+    function passTurn() {
+      const fromTeam = currentTurn === "BLUE" ? "A팀" : "B팀";
+      switchTurn(`${fromTeam}에서 턴을 넘겼습니다. 이제 ${currentTurn === "BLUE" ? "A팀" : "B팀"} 차례입니다.`);
+      render();
     }
 
     function toggleMaster() {
       isMaster = !isMaster;
       const btn = document.getElementById("master-btn");
-      btn.textContent = `코드마스터 정답 보기: ${isMaster ? "ON" : "OFF"}`;
+      btn.textContent = `정답 보기: ${isMaster ? "ON" : "OFF"}`;
       btn.classList.toggle("active", isMaster);
       render();
     }
 
     function flipCard(idx) {
+      const myTeam = document.getElementById("my-team").value;
       const card = cards[idx];
+
       if (card.revealed) return;
+      if (myTeam !== currentTurn) {
+        document.getElementById("status-msg").textContent =
+          `⛔ 지금은 ${currentTurn === "BLUE" ? "A팀" : "B팀"} 차례입니다. 내 팀(${myTeam === "BLUE" ? "A팀" : "B팀"}) 턴이 올 때까지 기다려 주세요!`;
+        return;
+      }
+
       card.revealed = true;
       lastClickedWord = card.word;
-      render(idx);
+
+      if (card.role === currentTurn) {
+        document.getElementById("status-msg").textContent =
+          `✅ 정답 카드 ["${card.word}"]! ${currentTurn === "BLUE" ? "A팀" : "B팀"} 턴이 이어집니다.`;
+        render(idx);
+      } else if (card.role === "NEUTRAL") {
+        switchTurn(`🟡 중립 카드 ["${card.word}"]를 뒤집어 턴이 ${currentTurn === "BLUE" ? "B팀" : "A팀"}으로 넘어갔습니다!`);
+        render(idx);
+      } else {
+        const nextTeamLabel = card.role === "BLUE" ? "A팀" : "B팀";
+        switchTurn(`❌ 상대 팀 카드 ["${card.word}"]를 뒤집어 턴이 ${nextTeamLabel}으로 넘어갔습니다!`);
+        render(idx);
+      }
     }
 
     function render(animatedIdx = -1) {
+      const myTeam = document.getElementById("my-team").value;
+      const isMyTurn = myTeam === currentTurn;
+
+      const banner = document.getElementById("turn-banner");
+      banner.classList.toggle("red-turn", currentTurn === "RED");
+      document.getElementById("turn-pill").textContent =
+        `현재 차례: ${currentTurn === "BLUE" ? "A팀 (BLUE)" : "B팀 (RED)"}`;
+      document.getElementById("turn-lock-msg").textContent = isMyTurn
+        ? "· 내 기기 조작 가능 (내 턴)"
+        : "· 상대 턴 대기 중 (카드 클릭 잠금)";
+      document.getElementById("round-info").textContent = `${roundCount}라운드`;
+
       const board = document.getElementById("board");
       board.innerHTML = "";
 
@@ -248,8 +343,9 @@
         el.className = "card";
         if (c.revealed) {
           el.classList.add(`revealed-${c.role}`);
-        } else if (isMaster) {
-          el.classList.add(`peek-${c.role}`);
+        } else {
+          if (!isMyTurn) el.classList.add("locked");
+          if (isMaster) el.classList.add(`peek-${c.role}`);
         }
 
         const roleLabel = c.role === "BLUE" ? "A팀" : c.role === "RED" ? "B팀" : "중립";
@@ -271,8 +367,8 @@
     }
 
     async function saveStoryToSheet() {
-      const groupNo = document.getElementById("group-no").value;
-      const selectedTeam = document.getElementById("selected-team").value;
+      const groupNo = document.getElementById("group-no").value + "조";
+      const selectedTeam = document.getElementById("my-team").value === "BLUE" ? "A팀" : "B팀";
       const groupStory = document.getElementById("group-story").value.trim();
 
       if (!groupStory) {
@@ -281,7 +377,7 @@
       }
       if (!GAS_WEBAPP_URL) {
         document.getElementById("status-msg").textContent =
-          `[로컬 기록됨] ${groupNo} ${selectedTeam} · 선택단어: ${lastClickedWord || "-"} · 스토리: "${groupStory}" (GAS URL 입력 시 시트에도 저장)`;
+          `[로컬 기록됨] ${groupNo} ${selectedTeam} · 선택단어: ${lastClickedWord || "-"} · 스토리: "${groupStory}"`;
         document.getElementById("group-story").value = "";
         return;
       }
@@ -299,12 +395,12 @@
           groupStory
         })
       });
-      document.getElementById("status-msg").textContent = `✅ ${groupNo} ${selectedTeam} 기록이 시트(Questions)에 저장되었습니다.`;
+      document.getElementById("status-msg").textContent = `✅ ${groupNo} ${selectedTeam} 기록이 시트에 저장되었습니다.`;
       document.getElementById("group-story").value = "";
       btn.disabled = false;
     }
 
-    resetBoard();
+    resetBoard(true);
   </script>
 </body>
 </html>
